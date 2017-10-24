@@ -1,12 +1,14 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Assets.Scripts
+namespace Assets.Scripts.DomainClasses
 {
     /// <summary>
     /// Abstract representation of an object that makes up part of a scene.
     /// </summary>
+    [Serializable]
     public abstract class SceneComponent
     {
         public readonly string identifier;

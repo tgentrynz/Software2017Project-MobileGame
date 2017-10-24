@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using System;
+using System.IO;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,16 +11,23 @@ namespace Assets.Scripts {
     public class ViewManager : MonoBehaviour {
 
         private static ViewManager instance; // Singleton instance
-        private GameManager viewModel; // Connection to game data
 
-        private ViewType currentView = ViewType.Menu;
-        private ViewType viewBeforeHelp = ViewType.Menu;
+        public ViewType currentView { get; private set; }
+        public ViewType viewBeforeHelp { get; private set; }
 
         /*bindings for scene information*/
+        public Canvas loginCanvas;
         public Canvas menuCanvas;
         public Canvas helpCanvas;
         public Canvas sceneCanvas;
         public Canvas inventoryCanvas;
+        private Canvas[] AllCanvases
+        {
+            get
+            {
+                return new Canvas[] { loginCanvas, menuCanvas, helpCanvas, sceneCanvas, inventoryCanvas};
+            }
+        }
 
         /*bindings for player input*/
         public InputField playerInput;
@@ -29,16 +38,6 @@ namespace Assets.Scripts {
         public static ViewManager Instance
         {
             get { return instance; }
-        }
-
-        public GameManager ViewModel
-        {
-            get
-            {
-                if (viewModel == null)
-                    viewModel = new GameManager();
-                return viewModel;
-            }
         }
 
         // Use this for initialization
@@ -57,27 +56,51 @@ namespace Assets.Scripts {
 
         }
 
+        // Ends the game
+        public void endGame()
+        {
+            // If the game is just being tested, do not keep any game data.
+#if UNITY_EDITOR
+            Action<string> deleteFile = (fp) =>
+             {
+                 try
+                 {
+                     if (File.Exists(fp))
+                     {
+                         File.Delete(fp);
+                         Debug.Log(String.Format("'{0}' deleted", fp));
+                     }
+                 }
+                 catch (Exception e)
+                 {
+                     Debug.Log(e.Message);
+                 }
+             };
+            deleteFile(@"Assets/StreamingAssets/game.db");
+            deleteFile(@"Assets/StreamingAssets/game.db.meta");
+#endif
+            Debug.Log("Application close request recieved.");
+            Application.Quit();
+        }
+
         private void initialise()
         {
             // Set up references
             instance = this; // Set singleton
 
+            currentView = ViewType.Login;
+            viewBeforeHelp = ViewType.Login;
+
             // Move all canvases into camera
-            menuCanvas.gameObject.GetComponent<RectTransform>().offsetMax = new Vector2(0, 0);
-            menuCanvas.gameObject.GetComponent<RectTransform>().offsetMin = new Vector2(0, 128);
-
-            helpCanvas.gameObject.GetComponent<RectTransform>().offsetMax = new Vector2(0, 0);
-            helpCanvas.gameObject.GetComponent<RectTransform>().offsetMin = new Vector2(0, 128);
-
-            sceneCanvas.gameObject.GetComponent<RectTransform>().offsetMax = new Vector2(0, 0);
-            sceneCanvas.gameObject.GetComponent<RectTransform>().offsetMin = new Vector2(0, 128);
-
-            inventoryCanvas.gameObject.GetComponent<RectTransform>().offsetMax = new Vector2(0, 0);
-            inventoryCanvas.gameObject.GetComponent<RectTransform>().offsetMin = new Vector2(0, 128);
+            foreach (Canvas c in AllCanvases)
+            {
+                c.gameObject.GetComponent<RectTransform>().offsetMax = new Vector2(0, 0);
+                c.gameObject.GetComponent<RectTransform>().offsetMin = new Vector2(0, 128);
+            }
             
             // Show menu canvas on start
             disableViews();
-            enableView(ViewType.Menu);
+            enableView(currentView);
 
             // Create events to handle user input
             inputSubmitEvent = new InputField.SubmitEvent();
@@ -85,6 +108,13 @@ namespace Assets.Scripts {
 
             // Apply events to GUI components
             playerInput.onEndEdit = inputSubmitEvent;
+
+            // Hide text input until player logs in
+            playerInput.gameObject.SetActive(false);
+            outputBoxText.transform.parent.gameObject.SetActive(false);
+
+            //Change resolution
+            Screen.SetResolution(320, 480, false);
         }
 
         private void handleInput(string arg)
@@ -101,9 +131,9 @@ namespace Assets.Scripts {
 
                 if (output.SystemMessage == "display update")
                     if (currentView == ViewType.Scene)
-                        updateSceneInformation(viewModel.CurrentScene);
+                        GameViewManager.Instance.updateSceneInformation();
                     else if (currentView == ViewType.Inventory)
-                        updateInventoryInformation(ViewModel.getPlayerInventory());
+                        GameViewManager.Instance.updateInventoryInformation();
             }
             else
             {
@@ -112,78 +142,53 @@ namespace Assets.Scripts {
 
             // Ready textbox for next input
             playerInput.text = "";
+#if !UNITY_ANDROID
+            /*
+            We only want to reselect the input field if the control scheme is keyboard e.g. the desktop versions
+            On the android version, touch controls mean that reselecting the input field after every command
+            will hide the game display behind the android keyboard at all times. Android users will probably
+            be more confortable pressing the input field every time they want to enter a command, since they're
+            already tapping on the screen to type. Desktop users would have to move their hand to the mouse if
+            the input field was not reselected, so for them it's preferable to have it reselected after every
+            command.
+            */
             playerInput.ActivateInputField();
+#endif
         }
 
+        /// <summary>
+        /// Update the text in the output text box.
+        /// </summary>
+        /// <param name="message"></param>
         public void updateOuputMessage(string message)
         {
             outputBoxText.text = message;
         }
 
-        public bool checkGameDataNeedsUpdating()
-        {
-            bool output = false;
-            if(currentView == ViewType.Inventory || currentView == ViewType.Scene)
-            {
-                output = true;
-            }
-            return output;
-        }
-
-        public void updateSceneInformation(Scene scene)
-        {
-            if (scene != null)
-            {
-                getSceneDescription().text = scene.Description;
-                getSceneBackground().sprite = loadBackgroundImage(scene.background);
-            }
-        }
-
-        public void updateInventoryInformation(SceneItem[] inventory)
-        {
-            if (inventory != null)
-            {
-                string output = "";
-                foreach(SceneItem item in inventory)
-                {
-                    output = string.Format("{0}{1}\n", output, item.fullName);
-                    Debug.Log(item.fullName);
-                }
-                getInventoryDescription().text = output;
-                // Scene Background = getSceneImage
-            }
-        }
-
+        /// <summary>
+        /// Hide all the UI screens.
+        /// </summary>
         private void disableViews()
         {
-            menuCanvas.gameObject.SetActive(false);
-            helpCanvas.gameObject.SetActive(false);
-            sceneCanvas.gameObject.SetActive(false);
-            inventoryCanvas.gameObject.SetActive(false);
-        }
-
-        public CommandOutput startGame(string argument)
-        {
-            CommandOutput output;
-            if (currentView == ViewType.Menu)
+            foreach (Canvas c in AllCanvases)
             {
-                viewModel.initialise();
-                enableView(ViewType.Scene);
-                output = new CommandOutput(true, "Game Started.", "display update");
+                c.gameObject.SetActive(false);
             }
-            else
-                output = new CommandOutput(false, "Game already started.", "Could not make new game as one is already in progress.");
-            return output;
         }
 
+        /// <summary>
+        /// Returns to the menu from the game.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput exitGame(string argument)
         {
             CommandOutput output;
             if(currentView == ViewType.Menu)
             {
-                output = new CommandOutput(true, "Closing Game", "");
-                Debug.Log("Application close request recieved.");
-                Application.Quit();
+                output = new CommandOutput(true, "Returning to menu.", "");
+                enableView(ViewType.Login);
+                
             }
             else if(currentView == ViewType.Scene || currentView == ViewType.Inventory)
             {
@@ -197,6 +202,11 @@ namespace Assets.Scripts {
             return output;
         }
 
+        /// <summary>
+        /// Changes the active view in the game.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput changeGameView(string argument)
         {
             CommandOutput output;
@@ -210,6 +220,11 @@ namespace Assets.Scripts {
             return output;
         }
 
+        /// <summary>
+        /// Opens the help screen.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput openHelp(string argument)
         {
             CommandOutput output;
@@ -223,6 +238,11 @@ namespace Assets.Scripts {
             return output;
         }
 
+        /// <summary>
+        /// Closes the help screen and returns to the previous screen.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput closeHelp(string argument)
         {
             CommandOutput output;
@@ -233,7 +253,25 @@ namespace Assets.Scripts {
             return output;
         }
 
-        private CommandOutput enableView(ViewType view)
+        // Method to allow a LoginManager to move to the actual game after handling user accounts
+        public void loginSuccess(int playerID)
+        {
+            Debug.Log(string.Format("User with ID {0} has logged in.", playerID));
+            // Reset the ViewManager's state
+            initialise();
+            // Move to game's menu screen
+            enableView(ViewType.Menu);
+            // Make sure user input is visible
+            playerInput.gameObject.SetActive(true);
+            outputBoxText.transform.parent.gameObject.SetActive(true);
+        }
+
+        /// <summary>
+        /// Enables the given screen.
+        /// </summary>
+        /// <param name="view"></param>
+        /// <returns></returns>
+        public CommandOutput enableView(ViewType view)
         {
             // GameObject to hold the view being switched to
             GameObject newView = null;
@@ -244,6 +282,15 @@ namespace Assets.Scripts {
 
             switch (view)
             {
+                case ViewType.Login:
+                    newView = loginCanvas.gameObject;
+                    LoginViewManager.Instance.setMenuStage(LoginViewManager.MenuStage.menu);
+                    // Hide text input until player logs in
+                    playerInput.gameObject.SetActive(false);
+                    outputBoxText.transform.parent.gameObject.SetActive(false);
+
+                    message = "Login Screen";
+                    break;
                 case ViewType.Menu:
                     newView = menuCanvas.gameObject;
                     message = "Main Menu";
@@ -256,13 +303,13 @@ namespace Assets.Scripts {
                     newView = sceneCanvas.gameObject;
                     message = "Viewing scene.";
 
-                    updateSceneInformation(viewModel.CurrentScene);
+                    GameViewManager.Instance.updateSceneInformation();
                     break;
                 case ViewType.Inventory:
                     newView = inventoryCanvas.gameObject;
                     message = "Opened inventory.";
 
-                    updateInventoryInformation(viewModel.getPlayerInventory());
+                    GameViewManager.Instance.updateInventoryInformation();
                     break;
                 default:
                     sceneChanged = false;
@@ -284,33 +331,10 @@ namespace Assets.Scripts {
             
         }
 
-        private Text getSceneDescription()
-        {
-            return sceneCanvas.transform.Find("SceneDescription").GetComponent<Text>();
-        }
-
-        private Image getSceneBackground()
-        {
-            return sceneCanvas.transform.Find("SceneBackground").GetComponent<Image>();
-        }
-
-        private Text getInventoryDescription()
-        {
-            return inventoryCanvas.transform.Find("InventoryDescription").GetComponent<Text>();
-        }
-
-        private Sprite loadBackgroundImage(string imageName)
-        {
-            Sprite output;
-            output = Resources.Load<Sprite>(imageName);
-            if (output == null) // If the system could not find the specified image, use a default one.
-                output = Resources.Load<Sprite>("testPic");
-            return output;
-        }
-
-        private enum ViewType
+        public enum ViewType
         {
             Null,
+            Login,
             Menu,
             Help,
             Scene,

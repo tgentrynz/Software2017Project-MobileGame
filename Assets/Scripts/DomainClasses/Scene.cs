@@ -1,13 +1,16 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Assets.Scripts.ActionResult;
+using SQLite4Unity3d;
 
-namespace Assets.Scripts { 
+namespace Assets.Scripts.DomainClasses {
     /// <summary>
     /// Represents a physical location in the game environment.
     /// </summary>
+    [Serializable]
     public class Scene {
         public readonly string identifier;
         public readonly string description;
@@ -38,6 +41,17 @@ namespace Assets.Scripts {
             components = new List<SceneComponent>();
         }
 
+        public Scene(DTO.Scene inputScene, SceneComponent[] inputComponents)
+        {
+            // Set information for this scene
+            this.identifier = inputScene.identifier;
+            this.description = inputScene.description;
+            this.background = inputScene.background;
+
+            // Create list for components
+            this.components = inputComponents.ToList<SceneComponent>();
+        }
+
         public bool addExit(string identifier, string fullName, string linkedSceneIdentifier)
         {
             bool o;
@@ -45,6 +59,18 @@ namespace Assets.Scripts {
             if (o)
             {
                 components.Add(new SceneExit(identifier, fullName, linkedSceneIdentifier));
+                forceExitListRefresh();
+            }
+            return o;
+        }
+
+        public bool addExit(SceneExit exit)
+        {
+            bool o;
+            o = (from component in components where component.identifier == identifier select component).ToList().Count < 1;
+            if (o)
+            {
+                components.Add(exit);
                 forceExitListRefresh();
             }
             return o;
@@ -209,4 +235,5 @@ namespace Assets.Scripts {
         }
 
     }
+
 }

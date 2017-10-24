@@ -1,12 +1,14 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Assets.Scripts
+namespace Assets.Scripts.DomainClasses
 {
     /// <summary>
     /// Represents part of a scene that can be used to move to another scene.
     /// </summary>
+    [Serializable]
     public class SceneExit : SceneComponent
     {
         public readonly string linkedSceneIdentifier;
@@ -16,6 +18,11 @@ namespace Assets.Scripts
             this.linkedSceneIdentifier = linkedSceneIdentifier;
         }
 
-        
+        public SceneExit(DTO.SceneComponent inputComponent, DTO.SceneExit inputExit) : base(inputComponent.identifier, inputComponent.fullName, ComponentType.Exit)
+        {
+            this.linkedSceneIdentifier = inputExit.linkedScene;
+        }
+
+
     }
 }

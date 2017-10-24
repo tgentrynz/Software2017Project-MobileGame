@@ -10,20 +10,19 @@ namespace Assets.Scripts
     /// </summary>
     public static class InputManager
     {
-        static private List<string> systemCommands;
         static private Dictionary<string, CommandDelegate> gameCommands;
-
         static private Dictionary<string, CommandDelegate> GameCommands
         {
             get
             {
                 if (gameCommands == null)
                 {
-                    CommandDelegate start = new CommandDelegate(ViewManager.Instance.startGame);
-                    CommandDelegate move = new CommandDelegate(ViewManager.Instance.ViewModel.playerMove);
-                    CommandDelegate get = new CommandDelegate(ViewManager.Instance.ViewModel.playerGet);
-                    CommandDelegate drop = new CommandDelegate(ViewManager.Instance.ViewModel.playerDrop);
-                    CommandDelegate interact = new CommandDelegate(ViewManager.Instance.ViewModel.playerInteract);
+                    CommandDelegate start = new CommandDelegate(GameViewManager.Instance.startGame);
+                    CommandDelegate continueGame = new CommandDelegate(GameViewManager.Instance.continueGame);
+                    CommandDelegate move = new CommandDelegate(GameViewManager.Instance.ViewModel.playerMove);
+                    CommandDelegate get = new CommandDelegate(GameViewManager.Instance.ViewModel.playerGet);
+                    CommandDelegate drop = new CommandDelegate(GameViewManager.Instance.ViewModel.playerDrop);
+                    CommandDelegate interact = new CommandDelegate(GameViewManager.Instance.ViewModel.playerInteract);
                     CommandDelegate view = new CommandDelegate(ViewManager.Instance.changeGameView);
                     CommandDelegate openHelp = new CommandDelegate(ViewManager.Instance.openHelp);
                     CommandDelegate closeHelp = new CommandDelegate(ViewManager.Instance.closeHelp);
@@ -32,7 +31,8 @@ namespace Assets.Scripts
                     // Initilise dictionary, organised for human ease of access
                     gameCommands = new Dictionary<string, CommandDelegate>()
                     {
-                        { "start", start},
+                        { "new", start},
+                        { "continue", continueGame},
                         { "go", move },
                         { "goto", move },
                         { "go to", move },

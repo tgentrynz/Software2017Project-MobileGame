@@ -1,9 +1,11 @@
 ﻿using Assets.Scripts.ActionResult;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using Assets.Scripts.DomainClasses;
 
 namespace Assets.Scripts
 {
@@ -12,30 +14,52 @@ namespace Assets.Scripts
     /// </summary>
     public class GameManager
     {
-        private DataAccess dataAccess;
-
         private const string StartScene = "room1";
-        private string playerID = "";
+        private int playerID = 0;
+        private int gameID = 0;
 
-        private Scene currentScene;
+        private string currentSceneIdentifier;
 
         public Scene CurrentScene
         {
-            get { return currentScene; }
-        }
-
-        //Constructor
-        public GameManager()
-        {
-            initialise();
-        }
-
-        public void initialise()
-        {
-            dataAccess = new DataAccess();
-            currentScene = dataAccess.findScene(StartScene);
+            get { return new DataAccess().findScene(gameID, currentSceneIdentifier);}
         }
         
+        public void startNewGame(int playerDataID)
+        {
+            DataAccess dataAccess = new DataAccess();
+            currentSceneIdentifier = StartScene;
+            gameID = dataAccess.createNewGame();
+            playerID = dataAccess.addPlayerToGame(playerDataID, gameID);
+            Debug.Log(string.Format("New instance id: {0}", playerID));
+            currentSceneIdentifier = dataAccess.getPlayerScene(playerID);
+        }
+
+        public bool startOldGame(int playerDataID)
+        {
+            Tuple<bool, int, int> continueResult;
+
+            DataAccess dataAccess = new DataAccess();
+            continueResult = dataAccess.findContinueInstance(playerDataID);
+            if(continueResult.Item1)
+            {
+                gameID = continueResult.Item2;
+                playerID = continueResult.Item3;
+                currentSceneIdentifier = dataAccess.getPlayerScene(playerID);
+            }
+            else
+            {
+                startNewGame(playerDataID);
+
+            }
+            return continueResult.Item1;
+        }
+
+        /// <summary>
+        /// Move the player through the given exit.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput playerMove(string argument)
         {
             string outputMessage = " "; // String to update display with.
@@ -43,15 +67,16 @@ namespace Assets.Scripts
 
             FindSceneExitResult searchResult; // Gets result from search for exit.
             Scene newScene = null; // The scene to move to
+            DataAccess dataAccess = new DataAccess();
 
-                
-            searchResult = dataAccess.findScene(currentScene.identifier).findExit(argument);
+            searchResult = dataAccess.findScene(gameID, currentSceneIdentifier).findExit(argument);
             if (searchResult.Found)
             {
-                newScene = dataAccess.findScene(searchResult.SceneExit.linkedSceneIdentifier);
+                newScene = dataAccess.findScene(gameID, searchResult.SceneExit.linkedSceneIdentifier);
                 if (newScene != null)
                 {
-                    currentScene = newScene;
+                    currentSceneIdentifier = newScene.identifier;
+                    dataAccess.setPlayerScene(playerID, newScene.identifier);
                     outputMessage = string.Format("Moved to {0}.", searchResult.SceneExit.fullName);
                     systemMessage = "display update";
                 }
@@ -70,12 +95,18 @@ namespace Assets.Scripts
             return new CommandOutput(true, outputMessage, systemMessage);
         }
 
+        /// <summary>
+        /// Get the given item.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput playerGet(string argument)
         {
             bool success = false;
             string outputMessage = "";
             string systemMessage = "Unexpected Error Encountered";
-            Scene sceneToChange = dataAccess.findScene(currentScene.identifier);
+            DataAccess dataAccess = new DataAccess();
+            Scene sceneToChange = dataAccess.findScene(gameID, currentSceneIdentifier);
 
             FindSceneItemResult searchResult = sceneToChange.findItem(argument);
             if (searchResult.Found)
@@ -83,11 +114,8 @@ namespace Assets.Scripts
                 if(searchResult.SceneItem.Type == SceneComponent.ComponentType.Key)
                 {
                     SceneKey item = (SceneKey)searchResult.SceneItem;
-                    sceneToChange.removeComponent(item.identifier);
-                    dataAccess.addPlayerInventoryItem(item);
-
-                    dataAccess.commitSceneChange(sceneToChange);
-                    dataAccess.commitInventoryChange();
+                    dataAccess.removeSceneComponent(gameID, sceneToChange, item);
+                    dataAccess.addPlayerInventoryItem(playerID, item);
 
                     success = true;
                     outputMessage = string.Format("Got {0}.", item.fullName);
@@ -108,22 +136,25 @@ namespace Assets.Scripts
             return new CommandOutput(success, outputMessage, systemMessage);
         }
 
+        /// <summary>
+        /// Drop the given item.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput playerDrop(string argument)
         {
             bool success = false;
             string outputMessage = "";
             string systemMessage = "Unexpected Error Encountered";
+            DataAccess dataAccess = new DataAccess();
 
             SceneItem[] searchResult = (from item in dataAccess.findPlayerInventory(playerID) where item.fullName.ToLower().Contains(argument.ToLower()) select item).ToArray();
                      
             if (searchResult.Length == 1)
             {
-                Scene sceneToChange = dataAccess.findScene(currentScene.identifier);
-                sceneToChange.addKeyItem(searchResult[0].identifier, searchResult[0].fullName);
-                dataAccess.removePlayerInventoryItem(searchResult[0].identifier);
-
-                dataAccess.commitSceneChange(sceneToChange);
-                dataAccess.commitInventoryChange();
+                Scene sceneToChange = dataAccess.findScene(gameID, currentSceneIdentifier);
+                dataAccess.addSceneComponent(gameID, sceneToChange, searchResult[0]);
+                dataAccess.removePlayerInventoryItem(playerID, searchResult[0]);
 
                 success = true;
                 outputMessage = string.Format("Dropped {0}", searchResult[0].fullName);
@@ -143,31 +174,34 @@ namespace Assets.Scripts
             return new CommandOutput(success, outputMessage, systemMessage);
         }
 
+        /// <summary>
+        /// Use the given item.
+        /// </summary>
+        /// <param name="argument"></param>
+        /// <returns></returns>
         public CommandOutput playerInteract(string argument)
         {
             bool success = false;
             string outputMessage = " "; // String to update display with.
             string systemMessage = "Unexpected Error Encountered"; // String to update the system with.
+            DataAccess dataAccess = new DataAccess();
 
-            FindSceneItemResult searchResult = dataAccess.findScene(currentScene.identifier).findItem(argument);
+            FindSceneItemResult searchResult = dataAccess.findScene(gameID, currentSceneIdentifier).findItem(argument);
 
             if (searchResult.Found)
             {
                 if (searchResult.SceneItem.Type == SceneComponent.ComponentType.Door)
                 {
                     SceneDoor item = (SceneDoor)searchResult.SceneItem;
-                    if (item.haveRequiredItem(dataAccess.findPlayerInventory("")))
+                    if (item.haveRequiredItem(dataAccess.findPlayerInventory(playerID)))
                     {
-                        Scene sceneToChange = dataAccess.findScene(currentScene.identifier);
-                        sceneToChange.removeComponent(item.identifier);
-                        sceneToChange.addExit(item.exitID, item.exitName, item.linkedScene);
-                        dataAccess.removePlayerInventoryItem(item.requiredItemIdentifier);
-
-                        dataAccess.commitSceneChange(sceneToChange);
-                        dataAccess.commitInventoryChange();
-
+                        Scene sceneToChange = dataAccess.findScene(gameID, currentSceneIdentifier);
+                        dataAccess.removeSceneComponent(gameID, sceneToChange, item);
+                        dataAccess.addSceneComponent(gameID, sceneToChange, item.exit);
+                        dataAccess.removePlayerInventoryItem(playerID, new SceneKey(item.requiredItemIdentifier, "Removed Item"));
+                        dataAccess.incrementPlayerScore(playerID);
                         success = true;
-                        outputMessage = item.successMessage;
+                        outputMessage = item.successMessage + " Your score is now " + new DataAccess().getPlayerScore(playerID).ToString();
                         systemMessage = "display update";
                     }
                     else
@@ -190,14 +224,13 @@ namespace Assets.Scripts
             return new CommandOutput(success, outputMessage, systemMessage);
         }
 
+        /// <summary>
+        /// Find all items currently in the player's inventory.
+        /// </summary>
+        /// <returns></returns>
         public SceneItem[] getPlayerInventory()
         {
-            return dataAccess.findPlayerInventory(playerID);
-        }
-
-        public enum GameState
-        {
-            menu
+            return new DataAccess().findPlayerInventory(playerID);
         }
     }
 }

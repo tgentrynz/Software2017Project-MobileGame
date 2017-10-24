@@ -23,7 +23,7 @@ namespace Assets.Scripts
         /// </summary>
         public string SystemMessage;
         
-        public CommandOutput(bool Success, string Message, string SystemMessage)
+        public CommandOutput(bool Success = false, string Message = "", string SystemMessage = "")
         {
             this.Success = Success;
             this.Message = Message;
