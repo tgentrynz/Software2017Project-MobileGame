@@ -60,25 +60,6 @@ namespace Assets.Scripts {
         public void endGame()
         {
             // If the game is just being tested, do not keep any game data.
-#if UNITY_EDITOR
-            Action<string> deleteFile = (fp) =>
-             {
-                 try
-                 {
-                     if (File.Exists(fp))
-                     {
-                         File.Delete(fp);
-                         Debug.Log(String.Format("'{0}' deleted", fp));
-                     }
-                 }
-                 catch (Exception e)
-                 {
-                     Debug.Log(e.Message);
-                 }
-             };
-            deleteFile(@"Assets/StreamingAssets/game.db");
-            deleteFile(@"Assets/StreamingAssets/game.db.meta");
-#endif
             Debug.Log("Application close request recieved.");
             Application.Quit();
         }
