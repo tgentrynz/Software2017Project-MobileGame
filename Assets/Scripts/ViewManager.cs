@@ -53,7 +53,7 @@ namespace Assets.Scripts {
         // Update is called once per frame
         void Update()
         {
-
+            
         }
 
         // Ends the game
@@ -168,12 +168,14 @@ namespace Assets.Scripts {
             if(currentView == ViewType.Menu)
             {
                 output = new CommandOutput(true, "Returning to menu.", "");
+                LoginManager.logout(GameViewManager.Instance.playerID);
                 enableView(ViewType.Login);
                 
             }
             else if(currentView == ViewType.Scene || currentView == ViewType.Inventory)
             {
                 enableView(ViewType.Menu);
+                GameViewManager.Instance.ViewModel.endGame();
                 output = new CommandOutput(true, "Returned to menu.", "The game was ended.");
             }
             else

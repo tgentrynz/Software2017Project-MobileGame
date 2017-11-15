@@ -24,6 +24,15 @@ namespace Assets.Scripts
         {
             get { return new DataAccess().findScene(gameID, currentSceneIdentifier);}
         }
+
+        public string CurrentSceneDescription
+        {
+            get
+            {
+                Scene s = CurrentScene;
+                return s.Description + MultiplayerManager.Instance.getPlayersInScene(s.identifier);
+            }
+        }
         
         public void startNewGame(int playerDataID)
         {
@@ -33,6 +42,7 @@ namespace Assets.Scripts
             playerID = dataAccess.addPlayerToGame(playerDataID, gameID);
             Debug.Log(string.Format("New instance id: {0}", playerID));
             currentSceneIdentifier = dataAccess.getPlayerScene(playerID);
+            MultiplayerManager.Instance.newSession();
         }
 
         public bool startOldGame(int playerDataID)
@@ -46,6 +56,7 @@ namespace Assets.Scripts
                 gameID = continueResult.Item2;
                 playerID = continueResult.Item3;
                 currentSceneIdentifier = dataAccess.getPlayerScene(playerID);
+                MultiplayerManager.Instance.newSession();
             }
             else
             {
@@ -53,6 +64,13 @@ namespace Assets.Scripts
 
             }
             return continueResult.Item1;
+        }
+
+        public void endGame()
+        {
+            MultiplayerManager.Instance.endSession();
+            playerID = 0;
+            gameID = 0;
         }
 
         /// <summary>
@@ -79,6 +97,9 @@ namespace Assets.Scripts
                     dataAccess.setPlayerScene(playerID, newScene.identifier);
                     outputMessage = string.Format("Moved to {0}.", searchResult.SceneExit.fullName);
                     systemMessage = "display update";
+
+                    // Let other players know the move has happened
+                    MultiplayerManager.Instance.sendPlayerMove(currentSceneIdentifier);
                 }
                 else
                 {
@@ -91,6 +112,7 @@ namespace Assets.Scripts
                 outputMessage = searchResult.Message;
                 systemMessage = searchResult.Message;
             }
+            
 
             return new CommandOutput(true, outputMessage, systemMessage);
         }

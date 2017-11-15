@@ -428,44 +428,15 @@ namespace Assets.Scripts
         }
 
         /// <summary>
-        /// Attempts to log a player in.
+        /// Allows the system to store a player's id in the local database so the can save their game locally
         /// </summary>
-        /// <param name="username"></param>
-        /// <param name="password"></param>
-        /// <returns></returns>
-        public Tuple<int, bool> playerLogin(string username, string password)
+        /// <param name="identifier"></param>
+        public void registerPlayerLocally(int identifier)
         {
-            int outputID = -1; // -1 means process failed
-            bool outputCorrectPassword = false;
-            DTO.PlayerData player = connection.Table<DTO.PlayerData>().Where(x => x.username == username).FirstOrDefault();
-            if (player != null)
+            if(connection.Table<DTO.PlayerData>().Where(x => x.identifier == identifier).FirstOrDefault() == null)
             {
-                Debug.Log(player.savedGameID);
-                outputID = player.identifier;
-                if (player.password == password)
-                    outputCorrectPassword = true;
+                connection.Insert(new PlayerData() { identifier = identifier });
             }
-            return Tuple.Create(outputID, outputCorrectPassword);
-        }
-
-        /// <summary>
-        /// Attempts to create a new player account.
-        /// </summary>
-        /// <param name="username"></param>
-        /// <param name="password"></param>
-        /// <returns></returns>
-        public int playerCreate(string username, string password)
-        {
-            int output = -1; // -1 means procees failed
-            // Make sure user name does not already exist
-            if(connection.Table<DTO.PlayerData>().Where(x => x.username == username).FirstOrDefault() == null)
-            {
-                // Create new player
-                connection.Insert(new DTO.PlayerData { username = username, password = password });
-                // Get ID of newly create player
-                output = connection.Table<DTO.PlayerData>().Where(x => x.username == username).FirstOrDefault().identifier;
-            }
-            return output;
         }
         
         public Tuple<bool, int, int> findContinueInstance(int playerDataID)

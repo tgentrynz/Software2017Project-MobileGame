@@ -13,10 +13,15 @@ namespace Assets.Scripts
 
         private static GameViewManager instance; // Singleton instance
         private GameManager viewModel; // Connection to game data
+       
         /// <summary>
         /// The id of the player account logged in
         /// </summary>
         public int playerID;
+        /// <summary>
+        /// The username of the player account logged in
+        /// </summary>
+        public string playerName;
 
         public static GameViewManager Instance
         {
@@ -48,7 +53,15 @@ namespace Assets.Scripts
         // Update is called once per frame
         void Update()
         {
-
+            if (checkGameDataNeedsUpdating())
+            {
+                switch (ViewManager.Instance.currentView)
+                {
+                    case ViewManager.ViewType.Scene:
+                        updateSceneInformation();
+                        break;
+                }
+            }
         }
 
         /// <summary>
@@ -80,7 +93,7 @@ namespace Assets.Scripts
         /// </summary>
         public void updateSceneInformation()
         {
-            getSceneDescription().text = viewModel.CurrentScene.Description;
+            getSceneDescription().text = viewModel.CurrentSceneDescription;
             getSceneBackground().sprite = loadBackgroundImage(viewModel.CurrentScene.background);
         }
 

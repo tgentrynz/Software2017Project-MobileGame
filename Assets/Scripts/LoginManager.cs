@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Assets.Scripts.ActionResult;
+using Assets.Scripts.DTO.JsonDrop;
+using UnityEngine;
 
 namespace Assets.Scripts
 {
@@ -12,31 +14,72 @@ namespace Assets.Scripts
     /// </summary>
     public static class LoginManager
     {
+        private const string GAME_ID = "SDV602$2017$Tim$Game$Test";
+
         public static LoginResult login(string username, string password)
         {
             LoginResult output;
-            DataAccess dataAccess = new DataAccess();
-            Tuple<int, bool> loginAction = dataAccess.playerLogin(username, password);
-            if (loginAction.Item1 != -1)
+            bool loggedIn = false;
+            JsonDrop c = JsonDrop.newConnection(GAME_ID);
+            PlayerData p = c.read<PlayerData>("username",username).FirstOrDefault();
+            if(p != null) 
             {
-                if (loginAction.Item2)
+                // Check player is already logged in
+                loggedIn = (p.lastSync != 0 ? (DateTime.FromBinary(p.lastSync).AddMinutes(1) > DateTime.Now) : false);
+                if (!loggedIn)
                 {
-                    GameViewManager.Instance.playerID = loginAction.Item1;
-                    output = new LoginResult(true, String.Format("Loged in as {0}", username), loginAction.Item1);
+                    if (p.password == password)
+                    {
+                        // Successful login
+                        GameViewManager.Instance.playerID = p.identifier; // Set the game to use this account ID
+                        GameViewManager.Instance.playerName = p.username;
+                        new DataAccess().registerPlayerLocally(p.identifier); // Create a local storage for the account
+
+                        // Let server know user is logged in
+                        p.online = true;
+                        p.lastSync = DateTime.Now.ToBinary();
+                        c.update(p);
+
+                        output = new LoginResult(true, String.Format("Loged in as {0}", p.username), p.identifier);
+                    }
+                    else
+                    {
+                        // Bad password
+                        output = new LoginResult(false, "Incorrect password entered");
+                    }
                 }
                 else
-                    output = new LoginResult(false, "Incorrect password entered");
+                {
+                    // Already logged in
+                    output = new LoginResult(false, "This user is already logged in, try again later");
+                }
             }
             else
+            {
+                // Bad username
                 output = new LoginResult(false, "Incorrect username entered");
+            }
             return output;
+        }
+
+        public static void logout(int identifier)
+        {
+            JsonDrop c = JsonDrop.newConnection(GAME_ID);
+            PlayerData p = c.read<PlayerData>(identifier.ToString()).FirstOrDefault();
+            if(p != null)
+            {
+                p.online = false;
+                p.lastSync = 0;
+                c.update(p);
+            }
+            GameViewManager.Instance.playerID = 0;
+            GameViewManager.Instance.playerName = "";
         }
 
         public static LoginResult create(string username, string password)
         {
             LoginResult output;
-            DataAccess dataAccess = new DataAccess();
-            int createAction;
+            JsonDrop c = JsonDrop.newConnection(GAME_ID);
             // Impose restrictions on password
             if (string.IsNullOrEmpty(password))
             {
@@ -44,16 +87,34 @@ namespace Assets.Scripts
             }
             else
             {
-                createAction = dataAccess.playerCreate(username, password);
-                if (createAction != -1)
+                // Check if an account already exists
+                PlayerData p = c.read<PlayerData>("username", username).FirstOrDefault();
+                if (p == null)
                 {
-                    GameViewManager.Instance.playerID = createAction;
-                    output = new LoginResult(true, String.Format("Create account and logged in as {0}", username), createAction);
+                    PlayerData[] existingPlayers = c.read<PlayerData>();
+                    int newID = (existingPlayers.Length != 0 ? existingPlayers.Max(x => x.identifier) + 1 : 1);
+                    c.create(new PlayerData() { identifier = newID, username = username, password = password, online = true, lastSync = DateTime.Now.ToBinary()});
+
+                    GameViewManager.Instance.playerID = newID; // Set the game to use this account ID
+                    new DataAccess().registerPlayerLocally(newID); // Create a local storage for the account
+
+                    output = new LoginResult(true, String.Format("Create account and logged in as {0}", username), newID);
                 }
                 else
                     output = new LoginResult(false, "Username already exists");
             }
             return output;
+        }
+
+        public static void reSync(int playerID)
+        {
+            JsonDrop c = JsonDrop.newConnection(GAME_ID);
+            PlayerData p = c.read<PlayerData>(playerID.ToString()).FirstOrDefault();
+            if(p != null)
+            {
+                p.lastSync = DateTime.Now.ToBinary();
+                c.update(p);
+            }
         }
         
     }
