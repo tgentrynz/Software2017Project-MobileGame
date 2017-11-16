@@ -11,10 +11,14 @@ namespace Assets.Scripts {
             Debug.Log(i);
             if (i > threshold)
             {
-                if (ViewManager.Instance.currentView == ViewManager.ViewType.Help)
-                {
-                    ViewManager.Instance.closeHelp("");
-                    ViewManager.Instance.outputBoxText.text = "Closed help.";
+                switch (ViewManager.Instance.currentView) {
+                    case ViewManager.ViewType.Help:
+                        ViewManager.Instance.closeHelp("");
+                        ViewManager.Instance.outputBoxText.text = "Closed help.";
+                        break;
+                    case ViewManager.ViewType.Menu:
+                        ViewManager.Instance.exitGame("");
+                        break;
                 }
             }
         }
